@@ -1,187 +1,322 @@
-# fix collision system, check before commit to new coords
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jul 14 16:02:43 2020
+
+@author: ryand
+"""
 
 
 import pygame
 import random
-import numpy as np
-
-types = [0, 1, 2, 3, 4, 5]
-colors = [1, 2, 3, 4, 5, 6]
-WIDTH = 10
-HEIGHT = 20
-FALL_SPEED = 3
-#Coordinates of each shape with top left being 0,0, y axis increase as it goes down
-SHAPE_COORDINATES = {0: [(0, 0), (0, 1), (1, 0), (1, 1)],
-                     1: [(0, 0), (0, 1), (1, 1), (1, 2)]}
-
-# General shape class
-class shape:
-    def __init__(self, type, rotation):
-        self.type = type
-        self.rotation = rotation
-        self.color = colors[type]
-        self.coordinates = SHAPE_COORDINATES[type]
-
-
-def add_piece(piece, board):
-    return draw_piece(piece, board)
-
-# occupied coords come in tuples (y, x, color)
-def create_board(WIDTH, HEIGHT, occupied_coords):
-    board = np.zeros((HEIGHT, WIDTH))
-    for coord in occupied_coords:
-        board[coord[0]][coord[1]] = coord[2]
-    return board
-
-# changes the coordinates of a piece, -1 is left, 0 is down, 1 is right
-def move_piece(piece, direction):
-    new_coords = []
-    if direction == 0:
-        for coord in piece.coordinates:
-            new_coords.append((coord[0] + 1, coord[1]))
-    else:
-        for coord in piece.coordinates:
-            new_coords.append((coord[0], coord[1] + direction))
-
-    if direction == 0:
-        print( 'Drop to: ', new_coords)
-    else:
-        print( 'Move to: ', new_coords)
-    return new_coords
-
-def draw_piece(piece, board):
-    for coord in piece.coordinates:
-        board[coord[0]][coord[1]] = piece.color
-    return board
-
-
-def down_collision(piece, occupied_coords):
-    for coord in drop_piece(piece):
-        if coord[0] >19 or occupied_collision(coord, occupied_coords):
+ 
+# creating the data structure for pieces
+# setting up global vars
+# functions
+# - create_grid
+# - draw_grid
+# - draw_window
+# - rotating shape in main
+# - setting up the main
+ 
+"""
+10 x 20 square grid
+shapes: S, Z, I, O, J, L, T
+represented in order by 0 - 6
+"""
+ 
+pygame.font.init()
+ 
+# GLOBALS VARS
+s_width = 800
+s_height = 700
+play_width = 300  # meaning 300 // 10 = 30 width per block
+play_height = 600  # meaning 600 // 20 = 20 height per block
+block_size = 30
+ 
+top_left_x = (s_width - play_width) // 2
+top_left_y = s_height - play_height
+ 
+ 
+# SHAPE FORMATS
+ 
+S = [['......',
+      '......',
+      '..00..',
+      '.00...',
+      '.....'],
+     ['.....',
+      '..0..',
+      '..00.',
+      '...0.',
+      '.....']]
+ 
+Z = [['.....',
+      '.....',
+      '.00..',
+      '..00.',
+      '.....'],
+     ['.....',
+      '..0..',
+      '.00..',
+      '.0...',
+      '.....']]
+ 
+I = [['..0..',
+      '..0..',
+      '..0..',
+      '..0..',
+      '.....'],
+     ['.....',
+      '0000.',
+      '.....',
+      '.....',
+      '.....']]
+ 
+O = [['.....',
+      '.....',
+      '.00..',
+      '.00..',
+      '.....']]
+ 
+J = [['.....',
+      '.0...',
+      '.000.',
+      '.....',
+      '.....'],
+     ['.....',
+      '..00.',
+      '..0..',
+      '..0..',
+      '.....'],
+     ['.....',
+      '.....',
+      '.000.',
+      '...0.',
+      '.....'],
+     ['.....',
+      '..0..',
+      '..0..',
+      '.00..',
+      '.....']]
+ 
+L = [['.....',
+      '...0.',
+      '.000.',
+      '.....',
+      '.....'],
+     ['.....',
+      '..0..',
+      '..0..',
+      '..00.',
+      '.....'],
+     ['.....',
+      '.....',
+      '.000.',
+      '.0...',
+      '.....'],
+     ['.....',
+      '.00..',
+      '..0..',
+      '..0..',
+      '.....']]
+ 
+T = [['.....',
+      '..0..',
+      '.000.',
+      '.....',
+      '.....'],
+     ['.....',
+      '..0..',
+      '..00.',
+      '..0..',
+      '.....'],
+     ['.....',
+      '.....',
+      '.000.',
+      '..0..',
+      '.....'],
+     ['.....',
+      '..0..',
+      '.00..',
+      '..0..',
+      '.....']]
+ 
+shapes = [S, Z, I, O, J, L, T]
+shape_colors = [(0, 255, 0), (255, 0, 0), (0, 255, 255), (255, 255, 0),
+                (255, 165, 0), (0, 0, 255), (128, 0, 128)]
+# index 0 - 6 represent shape
+ 
+ 
+class Piece(object):
+    def __init__(self, x, y, shape):
+        self.x = x
+        self.y = y
+        self.shape = shape
+        self.color = shape_colors[shapes.index(shape)]
+        self.rotation = 0
+ 
+def create_grid(locked_positions={}):
+    grid = [[(0,0,0) for x in range(10)] for x in range(20)]
+    
+    for i in range(len(grid)):
+        for j in range(len(grid[i])):
+            if(j,i) in locked_positions:
+                c = locked_positions[(j,i)]
+                grid[i][j] = c
+    return grid
+ 
+def convert_shape_format(shape):
+    positions = []
+    format = shape.shape[shape.rotation % len(shape.shape)]
+     
+    for i, line in enumerate(format):
+         row = list(line)
+         for j, column in enumerate(row):
+             if column == '0':
+                 positions.append((shape.x + j, shape.y + i))
+ 
+    for i, pos in enumerate(positions):
+        positions[i] = (pos[0] - 2, pos[1] - 4)
+        
+    return positions
+    
+def valid_space(shape, grid):
+    accepted_pos = [[(j, i) for j in range(10) if grid[i][j] == (0,0,0)] for i in range(20)]
+    accepted_pos = [j for sub in accepted_pos for j in sub]
+    
+    formatted = convert_shape_format(shape)
+    for pos in formatted:
+        if pos not in accepted_pos:
+            if pos[1]  > -1:
+                return False
+    return True
+            
+ 
+def check_lost(positions):
+    for pos in positions:
+        x, y = pos
+        if y < 1:
             return True
     return False
-
-
-def lateral_collision(piece, occupied_coords, direction):
-    for coord in move_lateral(piece, direction):
-        if coord[1] < 0 or coord[1] > 9 or occupied_collision(coord, occupied_coords):
-            return True
-    return False
-
-
-def occupied_collision(coord, occupied_coords):
-    # Remove color value for occupied coords
-    occupied_coords_no_color = []
-    for i in occupied_coords:
-        occupied_coords_no_color.append((i[0], i[1]))
-    if coord in occupied_coords_no_color:
-        return True
-    return False
-
-def move_lateral(piece, direction):
-    return move_piece(piece, direction)
-
-
-def drop_piece(piece):
-    return move_piece(piece, 0)
-
-
-def rotate_piece(piece):
-    new_coords = []
-    counter_clockwise_rotation_matrix = np.array([[0, -1],
-                                                  [1, 0]])
-
-    # difference between current coord0 and template coord0
-    translation = (piece.coordinates[0])
-
-    shape_centered_at_0 = []
-    for coord in piece.coordinates:
-        shape_centered_at_0.append((coord[0] - translation[0], coord[1] - translation[1]))
-
-    #create a list of 2x1 numpy matrices of the shapes coordinates
-    structured_shape_template = []
-    for coord in shape_centered_at_0:
-        structured_shape_template.append(np.array(([coord[0]], [coord[1]])))
-
-    # rotate the shape template
-    rotated_shape_centered_at_0 = []
-    for m in structured_shape_template:
-        rotated_shape_centered_at_0.append(np.dot(counter_clockwise_rotation_matrix, m))
-
-    # return rotated coordinates to a sinlge list of tuples
-    rotated_coords = []
-    for element in rotated_shape_centered_at_0:
-        rotated_coords.append((element[0][0], element[1][0]))
-
-    # translate it to the old piece location
-    for i in rotated_coords:
-        new_coords.append((i[0] + translation[0], i[1] + translation[1]))
-
-    print( 'Rotate to: ', new_coords)
-    return new_coords
-
-
-def rotated_collision(piece, occupied_coords):
-    for coord in rotate_piece(piece):
-        #Check for laterally on the board
-        if coord[1] < 0 or coord[1] >= WIDTH:
-            return True
-        # Check for vertically on the board
-        if coord[0] < 0 or coord[0] >= HEIGHT:
-            return True
-        # Check for collisions
-        if occupied_collision(coord, occupied_coords):
-            return True
-    return False
-
-
-def main_loop():
+ 
+def get_shape():
+    return Piece(5, 2, random.choice(shapes))
+ 
+def draw_text_middle(text, size, color, surface):
+    pass
+   
+def draw_grid(surface, grid):
+    sx = top_left_x
+    sy = top_left_y
+    
+    for i in range(len(grid)):
+        pygame.draw.line(surface, (128,128,128), (sx, sy+i*block_size),
+                         (sx+play_width, sy+i*block_size))
+        for j in range(len(grid[i])):
+            pygame.draw.line(surface, (128,128,128), (sx+j*block_size, sy),
+                         (sx+j*block_size, sy+play_height))
+    
+def clear_rows(grid, locked):
+    pass
+ 
+def draw_next_shape(shape, surface):
+    pass
+ 
+def draw_window(surface, grid):
+    surface.fill((0,0,0))
+    
+    pygame.font.init()
+    font = pygame.font.SysFont('comicsans', 60)
+    label = font.render('Tetris', 1, (255,255,255))
+    
+    topleftx = int(top_left_x + play_width/2 - (label.get_width()/2))
+    
+    
+    surface.blit(label, (topleftx, 30))
+ 
+    for i in range(len(grid)):
+        for j in range(len(grid[i])):
+            pygame.draw.rect(surface, grid[i][j],
+                             (top_left_x + j*block_size, top_left_y + i*block_size,
+                              block_size, block_size), 0)
+            
+    pygame.draw.rect(surface, (255,0,0), (top_left_x, top_left_y, play_width, play_height), 4)
+    
+    draw_grid(surface, grid)
+    pygame.display.update()
+    
+def main(surface):
+    
+    locked_positions = {}
+    grid = create_grid(locked_positions)
+    
+    change_piece = False
     run = True
+    current_piece = get_shape()
+    next_piece = get_shape()
+    clock = pygame.time.Clock()
     fall_time = 0
-    occupied_coords = []
-    i = 0
-    #clock = pygame.time.Clock()
-    #current_piece = shape(random.choice(types), 0)
-    current_piece = shape(1, 0)
-
-    # Main loop
+    fall_speed = 0.27
+    
     while run:
-
-        print( 'At: ', current_piece.coordinates)
-
-        #Spin
-        if rotated_collision(current_piece, occupied_coords):
-            pass
-        else:
-            current_piece.coordinates = rotate_piece(current_piece)
-
-
-        #Move
-        if lateral_collision(current_piece, occupied_coords, 1):
-            pass
-        else:
-            current_piece.coordinates = move_lateral(current_piece, 1)
-
-
-        #Drop
-        if down_collision(current_piece, occupied_coords):
-            for coord in current_piece.coordinates:
-                occupied_coords.append((coord[0], coord[1], current_piece.color))
-            current_piece = shape(random.choice([0,1]), 0)
-
-            #Run 10 pieces to check collisions
-            if i > 2:
+        grid = create_grid(locked_positions)
+        fall_time += clock.get_rawtime()
+        clock.tick()
+        
+        if fall_time/1000 > fall_speed:
+            fall_time = 0
+            current_piece.y += 1
+            if not(valid_space(current_piece, grid)) and current_piece.y >0:
+                current_piece.y -=1
+                change_piece = True
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
                 run = False
-            i += 1
-        else:
-            current_piece.coordinates = drop_piece(current_piece)
+                
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    current_piece.x -= 1
+                    if not(valid_space(current_piece, grid)):
+                        current_piece.x += 1
+                if event.key == pygame.K_RIGHT:
+                    current_piece.x += 1
+                    if not(valid_space(current_piece, grid)):
+                        current_piece.x -= 1
+                if event.key == pygame.K_DOWN:
+                    current_piece.y += 1
+                    if not(valid_space(current_piece, grid)):
+                        current_piece.y -= 1
+                if event.key == pygame.K_UP:
+                    current_piece.rotation += 1
+                    if not(valid_space(current_piece, grid)):
+                        current_piece.rotation -= 1
 
-        board = create_board(WIDTH, HEIGHT, occupied_coords)
-        #print(current_piece.coordinates)
-        #print(occupied_coords)
-        board = draw_piece(current_piece, board)
-        print(board, '\n\n')
+            shape_pos = convert_shape_format(current_piece)            
+            
+            for i in range(len(shape_pos)):
+                x,y = shape_pos[1]
+                if y> -1:
+                    grid[y][x] = current_piece.color
+            
+            if change_piece:
+                for pos in shape_pos:
+                    p = (pos[0], pos[1])
+                    locked_positions[p] = current_piece.color
+                current_piece = next_piece
+                next_piece = get_shape()
+                change_piece = False
+            
+            draw_window(win, grid)
+            
+            if check_lost(locked_positions):
+                run = False
+                
+    pygame.quit()   
+            
+def main_menu(win):
+    main(win)
 
-
-
-main_loop()
+win = pygame.display.set_mode((s_width, s_height))
+pygame.display.set_caption('Tetris')
+main_menu(win)  # start game
